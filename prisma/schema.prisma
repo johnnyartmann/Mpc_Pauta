@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  registrador
+  procurador
+  administrador
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         UserRole
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  pautas       Pauta[]
+  diarios      DiarioOficial[]
+  diariosProcurador DiarioOficial[] @relation("ProcuradorDiario")
+  processosPauta ProcessoPauta[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Pauta {
+  id              String         @id @default(uuid())
+  nome            String
+  arquivoOriginal String?        @map("arquivo_original")
+  importadoPorId  String         @map("importado_por_id")
+  dataImportacao  DateTime       @default(now()) @map("data_importacao")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  importadoPor    User           @relation(fields: [importadoPorId], references: [id])
+  processos       ProcessoPauta[]
+
+  @@map("pautas")
+}
+
+model Processo {
+  id              String         @id @default(uuid())
+  numeroProcesso  String         @unique @map("numero_processo")
+  grupo           String?
+  relator         String?
+  unidadeGestora  String?        @map("unidade_gestora")
+  assunto         String?
+  interessados    String?
+  searchVector    Unsupported("tsvector")?
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  pautas          ProcessoPauta[]
+
+  @@map("processos")
+}
+
+model ProcessoPauta {
+  id              String      @id @default(uuid())
+  pautaId         String      @map("pauta_id")
+  processoId      String      @map("processo_id")
+  procuradorId    String?     @map("procurador_id")
+  votoDivergente  Boolean     @default(false) @map("voto_divergente")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  pauta           Pauta       @relation(fields: [pautaId], references: [id], onDelete: Cascade)
+  processo        Processo    @relation(fields: [processoId], references: [id], onDelete: Cascade)
+  procurador      User?       @relation(fields: [procuradorId], references: [id])
+  documentos      Documento[]
+
+  @@unique([pautaId, processoId])
+  @@map("processos_pauta")
+}
+
+model Documento {
+  id               String        @id @default(uuid())
+  processoPautaId  String        @map("processo_pauta_id")
+  parecerMpc       String?       @map("parecer_mpc")
+  ementaVoto       String?       @map("ementa_voto")
+  propostaVoto     String?       @map("proposta_voto")
+  decisao          String?
+  votoDivergenteTexto String?    @map("voto_divergente_texto")
+  searchVector     Unsupported("tsvector")?
+  atualizadoEm     DateTime      @updatedAt @map("atualizado_em")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  processoPauta    ProcessoPauta @relation(fields: [processoPautaId], references: [id], onDelete: Cascade)
+
+  @@map("documentos")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  usuarioId   String   @map("usuario_id")
+  acao        String
+  entidade    String
+  entidadeId  String?  @map("entidade_id")
+  detalhes    Json?
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  usuario     User     @relation(fields: [usuarioId], references: [id])
+
+  @@index([entidade, entidadeId])
+  @@map("audit_logs")
+}
+
+model DiarioOficial {
+  id              String   @id @default(uuid())
+  dataPublicacao  DateTime @map("data_publicacao")
+  numeroEdicao    String?  @map("numero_edicao")
+  numeroProcesso  String   @map("numero_processo")
+  unidadeGestora  String?  @map("unidade_gestora")
+  responsavel     String?
+  interessados    String?
+  assunto         String?
+  relator         String?
+  unidadeTecnica  String?  @map("unidade_tecnica")
+  tipo            String
+  numeroDecisao   String?  @map("numero_decisao")
+  conteudoHtml    String?  @map("conteudo_html")
+  parecer         String?  @map("parecer")
+  searchVector    Unsupported("tsvector")?
+  procuradorId    String?  @map("procurador_id")
+  diverge         Boolean  @default(false)
+  importadoPorId  String   @map("importado_por_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  importadoPor    User     @relation(fields: [importadoPorId], references: [id])
+  procurador      User?    @relation("ProcuradorDiario", fields: [procuradorId], references: [id])
+
+  @@index([dataPublicacao])
+  @@index([numeroProcesso])
+  @@map("diario_oficial")
+}
