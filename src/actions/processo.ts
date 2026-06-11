@@ -91,8 +91,12 @@ export async function getPautas() {
     include: {
       _count: { select: { processos: true } },
       processos: {
-        include: {
-          documentos: true,
+        select: {
+          id: true,
+          documentos: {
+            select: { parecerMpc: true, propostaVoto: true },
+            take: 1,
+          },
         },
       },
     },

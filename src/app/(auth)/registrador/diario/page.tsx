@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import React from "react";
 import Link from "next/link";
 import { listarDiarios, getDatasDisponiveis, deleteDiario, assignProcuradorDiario, toggleDivergeDiario } from "@/actions/diario";
@@ -54,29 +54,45 @@ export default function DiarioListPage() {
     parecer_previo: "Parecer Prévio",
   };
 
+  // Debounced search value to avoid spamming requests on each keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(filters.search), 400);
+    return () => clearTimeout(timer);
+  }, [filters.search]);
+
+  // Stable filter object for fetchData dependency
+  const stableFilters = useMemo(() => ({
+    dataInicio: filters.dataInicio || undefined,
+    dataFim: filters.dataFim || undefined,
+    search: debouncedSearch || undefined,
+    procuradorId: filters.procuradorId || undefined,
+    diverge: filters.diverge,
+  }), [filters.dataInicio, filters.dataFim, debouncedSearch, filters.procuradorId, filters.diverge]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = {
-        dataInicio: filters.dataInicio || undefined,
-        dataFim: filters.dataFim || undefined,
-        search: filters.search || undefined,
-        procuradorId: filters.procuradorId || undefined,
-        diverge: filters.diverge,
+      const data = await listarDiarios({
+        ...stableFilters,
         page,
         pageSize: 20,
-      };
-      const data = await listarDiarios(params);
+      });
       setResult(data);
     } catch {
       setResult(null);
     }
     setLoading(false);
-  }, [filters, page]);
+  }, [stableFilters, page]);
 
+  // Load reference data ONCE on mount
   useEffect(() => {
     getDatasDisponiveis().then(setDatas).catch(() => {});
     getProcuradores().then(setProcuradores).catch(() => {});
+  }, []);
+
+  // Fetch data when filters or page change
+  useEffect(() => {
     fetchData();
   }, [fetchData]);
 

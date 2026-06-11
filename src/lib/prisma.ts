@@ -43,6 +43,9 @@ export const prisma =
     adapter: new PrismaPg(pool),
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// Cache globally in ALL environments (including production/serverless)
+// In Vercel, globalThis persists across invocations of the same worker,
+// allowing pg.Pool reuse instead of creating a new connection per request.
+globalForPrisma.prisma = prisma;
 
 

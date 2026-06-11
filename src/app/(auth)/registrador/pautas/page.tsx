@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { getProcessos, getPautas, assignProcurador, toggleVotoDivergente, getProcuradores, deleteProcessoPauta } from "@/actions/processo";
 
@@ -21,20 +21,41 @@ export default function PautasListPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Debounce text filters to avoid requests on every keystroke
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedFilters(filters), 400);
+    return () => clearTimeout(timer);
+  }, [filters]);
+
+  // Stable filter object for fetchData dependency
+  const stableFilters = useMemo(() => ({
+    pautaId: debouncedFilters.pautaId || undefined,
+    relator: debouncedFilters.relator || undefined,
+    unidadeGestora: debouncedFilters.unidadeGestora || undefined,
+    search: debouncedFilters.search || undefined,
+    procuradorId: debouncedFilters.procuradorId || undefined,
+  }), [debouncedFilters]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getProcessos({ ...filters, page, pageSize: 20 });
+      const data = await getProcessos({ ...stableFilters, page, pageSize: 20 });
       setResult(data);
     } catch {
       setResult(null);
     }
     setLoading(false);
-  }, [filters, page]);
+  }, [stableFilters, page]);
 
+  // Load reference data ONCE on mount
   useEffect(() => {
     getPautas().then(setPautas).catch(() => {});
     getProcuradores().then(setProcuradores).catch(() => {});
+  }, []);
+
+  // Fetch data when filters or page change
+  useEffect(() => {
     fetchData();
   }, [fetchData]);
 
