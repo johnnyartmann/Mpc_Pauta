@@ -5,7 +5,7 @@ import { prisma } from "./prisma";
 import dotenv from "dotenv";
 import path from "path";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env"), override: true });
 
 export const authConfig: NextAuthConfig = {
   pages: { signIn: "/" },

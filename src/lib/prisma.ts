@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import path from "path";
 
 // Explicitly load .env file from absolute path to solve Next.js Turbopack issue on Windows
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env"), override: true });
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 

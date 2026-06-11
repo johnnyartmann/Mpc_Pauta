@@ -86,7 +86,7 @@ export async function searchDocumentos(query: string) {
       prisma.$queryRawUnsafe<any[]>(
         `SELECT 
           d.id, 
-          ts_rank(d.search_vector, to_tsquery('portuguese', $1)) AS rank,
+          ts_rank(d."searchVector", to_tsquery('portuguese', $1)) AS rank,
           ts_headline('portuguese', COALESCE(d.parecer_mpc, '') || ' ' || COALESCE(d.ementa_voto, '') || ' ' || COALESCE(d.proposta_voto, '') || ' ' || COALESCE(d.decisao, ''), to_tsquery('portuguese', $1), 'MaxWords=30, MinWords=15, StartSel=<mark>, StopSel=</mark>') AS trecho,
           'pauta' AS origem,
           pp.processo_id,
@@ -97,7 +97,7 @@ export async function searchDocumentos(query: string) {
         JOIN processos_pauta pp ON pp.id = d.processo_pauta_id
         JOIN processos proc ON proc.id = pp.processo_id
         JOIN pautas p ON p.id = pp.pauta_id
-        WHERE d.search_vector @@ to_tsquery('portuguese', $1)
+        WHERE d."searchVector" @@ to_tsquery('portuguese', $1)
         ORDER BY rank DESC
         LIMIT 30`,
         tsquery
@@ -106,13 +106,13 @@ export async function searchDocumentos(query: string) {
       prisma.$queryRawUnsafe<any[]>(
         `SELECT 
           id,
-          ts_rank(search_vector, to_tsquery('portuguese', $1)) AS rank,
+          ts_rank("searchVector", to_tsquery('portuguese', $1)) AS rank,
           ts_headline('portuguese', COALESCE(assunto, '') || ' ' || COALESCE(interessados, ''), to_tsquery('portuguese', $1), 'MaxWords=30, MinWords=15, StartSel=<mark>, StopSel=</mark>') AS trecho,
           'processo' AS origem,
           id AS processo_id,
           numero_processo
         FROM processos
-        WHERE search_vector @@ to_tsquery('portuguese', $1)
+        WHERE "searchVector" @@ to_tsquery('portuguese', $1)
         ORDER BY rank DESC
         LIMIT 30`,
         tsquery
@@ -121,13 +121,13 @@ export async function searchDocumentos(query: string) {
       prisma.$queryRawUnsafe<any[]>(
         `SELECT 
           id,
-          ts_rank(search_vector, to_tsquery('portuguese', $1)) AS rank,
+          ts_rank("searchVector", to_tsquery('portuguese', $1)) AS rank,
           ts_headline('portuguese', COALESCE(parecer, '') || ' ' || COALESCE(conteudo_html, '') || ' ' || COALESCE(assunto, ''), to_tsquery('portuguese', $1), 'MaxWords=30, MinWords=15, StartSel=<mark>, StopSel=</mark>') AS trecho,
           'diario' AS origem,
           id AS processo_id,
           numero_processo
         FROM diario_oficial
-        WHERE search_vector @@ to_tsquery('portuguese', $1)
+        WHERE "searchVector" @@ to_tsquery('portuguese', $1)
         ORDER BY rank DESC
         LIMIT 30`,
         tsquery
