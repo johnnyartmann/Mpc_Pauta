@@ -69,40 +69,64 @@ export async function importarDiario(prevState: any, formData: FormData) {
   let novosCount = 0;
   let existentesCount = 0;
 
-  for (const entrada of extractResult.entradas) {
-    if (!entrada.numero_processo) continue;
+  const validEntradas = extractResult.entradas.filter((e) => e.numero_processo);
 
-    const existing = await prisma.diarioOficial.findFirst({
+  if (validEntradas.length > 0) {
+    const existingDiarios = await prisma.diarioOficial.findMany({
       where: {
-        numeroProcesso: entrada.numero_processo,
         dataPublicacao,
-        numeroDecisao: entrada.numero_decisao || null,
+        OR: validEntradas.map((e) => ({
+          numeroProcesso: e.numero_processo,
+          numeroDecisao: e.numero_decisao || null,
+        })),
       },
     });
 
-    if (existing) {
-      existentesCount++;
-      continue;
+    const existingKeys = new Set<string>();
+    for (const d of existingDiarios) {
+      existingKeys.add(`${d.numeroProcesso}||${d.numeroDecisao || ""}`);
     }
 
-    await prisma.diarioOficial.create({
-      data: {
+    const novosDiariosData: any[] = [];
+    const localKeys = new Set<string>();
+
+    for (const entrada of validEntradas) {
+      const key = `${entrada.numero_processo}||${entrada.numero_decisao || ""}`;
+
+      if (existingKeys.has(key)) {
+        existentesCount++;
+        continue;
+      }
+
+      if (localKeys.has(key)) {
+        continue;
+      }
+      localKeys.add(key);
+
+      novosDiariosData.push({
         dataPublicacao,
         numeroEdicao: extractResult.numero_edicao,
         numeroProcesso: entrada.numero_processo,
-        unidadeGestora: entrada.unidade_gestora,
+        unidadeGestora: entrada.unidade_gestora || null,
         responsavel: (entrada as any).responsavel || "",
-        interessados: entrada.interessados,
-        assunto: entrada.assunto,
-        relator: entrada.relator,
-        unidadeTecnica: entrada.unidade_tecnica,
+        interessados: entrada.interessados || null,
+        assunto: entrada.assunto || null,
+        relator: entrada.relator || null,
+        unidadeTecnica: entrada.unidade_tecnica || null,
         tipo: entrada.tipo,
-        numeroDecisao: entrada.numero_decisao,
-        conteudoHtml: entrada.conteudo_html,
+        numeroDecisao: entrada.numero_decisao || null,
+        conteudoHtml: entrada.conteudo_html || null,
         importadoPorId: session.userId,
-      },
-    });
-    novosCount++;
+      });
+      novosCount++;
+    }
+
+    if (novosDiariosData.length > 0) {
+      await prisma.diarioOficial.createMany({
+        data: novosDiariosData,
+        skipDuplicates: true,
+      });
+    }
   }
 
   const total = extractResult.entradas.length;

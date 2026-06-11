@@ -5,6 +5,7 @@ import { verifySession } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
+import { v4 as uuidv4 } from "uuid";
 
 export async function importarPauta(prevState: any, formData: FormData) {
   const session = await verifySession();
@@ -87,6 +88,18 @@ export async function importarPauta(prevState: any, formData: FormData) {
   let totalLinhas = 0;
   const linhasIgnoradas: number[] = [];
 
+  const rowsToProcess: {
+    grupo: string;
+    numeroProcesso: string;
+    relator: string;
+    unidadeGestora: string;
+    assunto: string;
+    interessados: string;
+    rowIndex: number;
+  }[] = [];
+
+  const uniqueNumeros = new Set<string>();
+
   for (let i = 2; i < data.length; i++) {
     const row = data[i];
     totalLinhas++;
@@ -107,48 +120,105 @@ export async function importarPauta(prevState: any, formData: FormData) {
       continue;
     }
 
-    let processo = await prisma.processo.findUnique({
-      where: { numeroProcesso },
-    });
+    if (uniqueNumeros.has(numeroProcesso)) {
+      continue;
+    }
+    uniqueNumeros.add(numeroProcesso);
 
-    if (!processo) {
-      processo = await prisma.processo.create({
-        data: {
-          numeroProcesso,
-          grupo: grupo || null,
-          relator: relator || null,
-          unidadeGestora: unidadeGestora || null,
-          assunto: assunto || null,
-          interessados: interessados || null,
-        },
+    rowsToProcess.push({
+      grupo,
+      numeroProcesso,
+      relator,
+      unidadeGestora,
+      assunto,
+      interessados,
+      rowIndex: i + 1,
+    });
+  }
+
+  const numerosList = Array.from(uniqueNumeros);
+  const processosExistentes = await prisma.processo.findMany({
+    where: {
+      numeroProcesso: { in: numerosList },
+    },
+  });
+
+  const existenteMap = new Map<string, typeof processosExistentes[0]>();
+  for (const p of processosExistentes) {
+    existenteMap.set(p.numeroProcesso, p);
+  }
+
+  const novosProcessosData: any[] = [];
+  const updatesToRun: any[] = [];
+  const todosProcessosMap = new Map<string, { id: string }>();
+
+  for (const row of rowsToProcess) {
+    const existing = existenteMap.get(row.numeroProcesso);
+
+    if (!existing) {
+      const newId = uuidv4();
+      novosProcessosData.push({
+        id: newId,
+        numeroProcesso: row.numeroProcesso,
+        grupo: row.grupo || null,
+        relator: row.relator || null,
+        unidadeGestora: row.unidadeGestora || null,
+        assunto: row.assunto || null,
+        interessados: row.interessados || null,
       });
+      todosProcessosMap.set(row.numeroProcesso, { id: newId });
       novosCount++;
     } else {
+      todosProcessosMap.set(row.numeroProcesso, { id: existing.id });
       existentesCount++;
-      await prisma.processo.update({
-        where: { id: processo.id },
-        data: {
-          grupo: grupo || null,
-          relator: relator || null,
-          unidadeGestora: unidadeGestora || null,
-          assunto: assunto || null,
-          interessados: interessados || null,
-        },
-      });
-    }
 
-    await prisma.processoPauta.upsert({
-      where: {
-        pautaId_processoId: {
-          pautaId: pauta.id,
-          processoId: processo.id,
-        },
-      },
-      create: {
-        pautaId: pauta.id,
-        processoId: processo.id,
-      },
-      update: {},
+      const hasChanged =
+        existing.grupo !== (row.grupo || null) ||
+        existing.relator !== (row.relator || null) ||
+        existing.unidadeGestora !== (row.unidadeGestora || null) ||
+        existing.assunto !== (row.assunto || null) ||
+        existing.interessados !== (row.interessados || null);
+
+      if (hasChanged) {
+        updatesToRun.push(
+          prisma.processo.update({
+            where: { id: existing.id },
+            data: {
+              grupo: row.grupo || null,
+              relator: row.relator || null,
+              unidadeGestora: row.unidadeGestora || null,
+              assunto: row.assunto || null,
+              interessados: row.interessados || null,
+            },
+          })
+        );
+      }
+    }
+  }
+
+  if (novosProcessosData.length > 0) {
+    await prisma.processo.createMany({
+      data: novosProcessosData,
+      skipDuplicates: true,
+    });
+  }
+
+  if (updatesToRun.length > 0) {
+    await prisma.$transaction(updatesToRun);
+  }
+
+  const processoPautaData = rowsToProcess.map((row) => {
+    const proc = todosProcessosMap.get(row.numeroProcesso);
+    return {
+      pautaId: pauta.id,
+      processoId: proc!.id,
+    };
+  });
+
+  if (processoPautaData.length > 0) {
+    await prisma.processoPauta.createMany({
+      data: processoPautaData,
+      skipDuplicates: true,
     });
   }
 

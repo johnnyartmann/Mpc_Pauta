@@ -4,12 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import path from "path";
 import fs from "fs";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
+import { processarVotoPDF } from "@/lib/pdf-processor";
 
 export async function getOrCreateDocumento(
   processoId: string,
@@ -175,7 +174,7 @@ export async function searchDocumentos(query: string) {
   }
 }
 
-const execFileAsync = promisify(execFile);
+
 
 export async function extrairVotoPdf(formData: FormData) {
   const session = await verifySession();
@@ -189,7 +188,7 @@ export async function extrairVotoPdf(formData: FormData) {
 
   const tmpDir = os.tmpdir();
   const tmpPath = path.join(tmpDir, `${uuidv4()}.pdf`);
-  const scriptPath = path.join(process.cwd(), "scripts", "extract_voto.py");
+
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -199,16 +198,7 @@ export async function extrairVotoPdf(formData: FormData) {
   }
 
   try {
-    const { stdout } = await execFileAsync("python", [scriptPath, tmpPath], {
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 60000,
-      encoding: "utf8",
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
-      shell: true,
-    });
-
-    const result = JSON.parse(stdout);
-    if (result.error) return { error: result.error };
+    const result = await processarVotoPDF(tmpPath);
     return { ementa_html: result.ementa_html || "", proposta_html: result.proposta_html || "" };
   } catch (err: any) {
     return { error: `Erro ao processar PDF: ${err.message}` };
