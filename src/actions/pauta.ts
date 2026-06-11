@@ -210,6 +210,7 @@ export async function importarPauta(prevState: any, formData: FormData) {
   const processoPautaData = rowsToProcess.map((row) => {
     const proc = todosProcessosMap.get(row.numeroProcesso);
     return {
+      id: uuidv4(),
       pautaId: pauta.id,
       processoId: proc!.id,
     };

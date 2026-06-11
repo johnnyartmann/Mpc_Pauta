@@ -104,6 +104,7 @@ export async function importarDiario(prevState: any, formData: FormData) {
       localKeys.add(key);
 
       novosDiariosData.push({
+        id: uuidv4(),
         dataPublicacao,
         numeroEdicao: extractResult.numero_edicao,
         numeroProcesso: entrada.numero_processo,
