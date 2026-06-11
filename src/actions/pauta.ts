@@ -165,6 +165,7 @@ export async function importarPauta(prevState: any, formData: FormData) {
         unidadeGestora: row.unidadeGestora || null,
         assunto: row.assunto || null,
         interessados: row.interessados || null,
+        updatedAt: new Date(),
       });
       todosProcessosMap.set(row.numeroProcesso, { id: newId });
       novosCount++;

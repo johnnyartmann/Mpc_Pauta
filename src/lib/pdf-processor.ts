@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { PDFParse } from "pdf-parse";
+// @ts-ignore
+import pdf from "pdf-parse/lib/pdf-parse.js";
 
 interface EntradaDiario {
   numero_processo: string;
@@ -216,7 +217,7 @@ function determineTipo(entryText: string): "decisao_singular" | "parecer_previo"
   if (/DECIS[.\u00c3\u00c2]O\s+SINGULAR/i.test(entryText)) {
     return "decisao_singular";
   }
-  if (/Parecer\s+Pr[.\u00e9\u00e8]vio\s*-\s*Presta[.\u00e7][.\u00e3\u00e2]o\s+de\s+Contas/i.test(entryText)) {
+  if (/Parecer\s+Pr[.\u00e9\u00e8]vio\s*-\s*Presta[.\u00c7][.\u00e3\u00e2]o\s+de\s+Contas/i.test(entryText)) {
     return "parecer_previo";
   }
   return "deliberacao_plenario";
@@ -306,6 +307,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
+// Check if a line is a header
 function isHeaderLine(text: string): boolean {
   const stripped = text.trim();
   if (!stripped) return false;
@@ -532,21 +534,38 @@ function isUpper(str: string): boolean {
   return str === str.toUpperCase() && str !== str.toLowerCase();
 }
 
+// Custom page rendering function for pdf-parse v1.1.1
+async function renderPage(pageData: any): Promise<string> {
+  const textContent = await pageData.getTextContent({
+    normalizeWhitespace: false,
+    disableCombineTextItems: false,
+  });
+
+  let lastY: number | undefined;
+  let text = "";
+  for (const item of textContent.items) {
+    if (lastY === item.transform[5] || !lastY) {
+      text += item.str;
+    } else {
+      text += "\n" + item.str;
+    }
+    lastY = item.transform[5];
+  }
+
+  const pageNum = pageData.pageNumber; // 1-based index
+  return cleanPageText(text, pageNum === 1);
+}
+
 // ── Exported API ─────────────────────────────────────────────────────────────
 
 export async function processarPDF(pdfPath: string): Promise<ExtractResult> {
   try {
     const dataBuffer = fs.readFileSync(pdfPath);
-    const parser = new PDFParse({ data: new Uint8Array(dataBuffer) });
-    const textResult = await parser.getText();
+    const result = await pdf(dataBuffer, {
+      pagerender: renderPage,
+    });
 
-    const pageTexts: string[] = [];
-    for (const page of textResult.pages) {
-      const cleaned = cleanPageText(page.text, page.num === 1);
-      pageTexts.push(cleaned);
-    }
-
-    const fullText = pageTexts.join("\n");
+    const fullText = result.text || "";
 
     const data_publicacao = extractDate(pdfPath) || "";
     const numero_edicao = extractEdition(fullText);
@@ -633,9 +652,8 @@ export async function processarPDF(pdfPath: string): Promise<ExtractResult> {
 export async function processarVotoPDF(pdfPath: string): Promise<{ ementa_html: string; proposta_html: string }> {
   try {
     const dataBuffer = fs.readFileSync(pdfPath);
-    const parser = new PDFParse({ data: new Uint8Array(dataBuffer) });
-    const textResult = await parser.getText();
-    const fullText = textResult.text || "";
+    const result = await pdf(dataBuffer);
+    const fullText = result.text || "";
 
     const ementaHtml = extractEmenta(fullText);
     const propostaHtml = extractProposta(fullText);
