@@ -32,6 +32,7 @@ export async function processarPDF(pdfPath: string): Promise<ExtractResult> {
       timeout: 60000,
       encoding: "utf8",
       env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+      shell: true,
     });
 
     const result = JSON.parse(stdout);
