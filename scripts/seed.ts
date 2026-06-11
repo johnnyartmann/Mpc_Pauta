@@ -1,17 +1,22 @@
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 
 async function seed() {
   dotenv.config({ override: true });
+
+  const pool = new pg.Pool({
+    connectionString:
+      process.env.DATABASE_URL ||
+      "postgresql://postgres:postgres@localhost:5432/mpc_pauta?schema=public",
+    ssl: { rejectUnauthorized: false },
+  });
+
   const prisma = new PrismaClient({
-    adapter: new PrismaPg({
-      connectionString:
-        process.env.DATABASE_URL ||
-        "postgresql://postgres:postgres@localhost:5432/mpc_pauta?schema=public",
-    }),
+    adapter: new PrismaPg(pool),
   });
 
   const hash = bcrypt.hashSync("mpc2026", 10);
